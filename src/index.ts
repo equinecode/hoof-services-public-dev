@@ -1,12 +1,9 @@
 import "dotenv/config";
 import { loadEnv } from "./config/env";
-import { initInfisical } from "./lib/infisical";
 import { startServer } from "./server";
 
 async function main() {
-  const env = loadEnv();
-
-  await initInfisical(env);
+  const env = await loadEnv();
   await startServer(env);
 }
 

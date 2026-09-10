@@ -2,6 +2,7 @@ import express from "express";
 import type { Env } from "./config/env";
 import { createClerkMiddleware } from "./middleware/clerk";
 import { errorHandler } from "./middleware/errorHandler";
+import { createVerifyGatewaySecret } from "./middleware/gatewaySecretAuth";
 import { createMoesifMiddleware } from "./middleware/moesif";
 import { apiRouter } from "./routes";
 
@@ -9,6 +10,8 @@ export function createApp(env: Env) {
   const app = express();
 
   app.disable("x-powered-by");
+
+  app.use(createVerifyGatewaySecret(env.GATEWAY_SHARED_SECRET));
 
   // Clerk must run before other middleware
   app.use(createClerkMiddleware(env));

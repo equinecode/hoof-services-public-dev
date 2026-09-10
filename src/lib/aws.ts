@@ -48,7 +48,7 @@ export async function publishEvent(
   env: Env,
   detailType: string,
   detail: Record<string, unknown>,
-  source = "hoof.public",
+  source = "com.hoofmart.public",
 ): Promise<void> {
   const client = getEventBridgeClient(env);
 
