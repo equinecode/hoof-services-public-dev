@@ -19,7 +19,7 @@
   "license": "ISC",
   "type": "commonjs",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "@aws-sdk/client-eventbridge": "^3.1109.0",
