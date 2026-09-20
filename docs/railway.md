@@ -87,7 +87,7 @@ Database migrations run in the **pre-deploy** step (not during build) because Ra
 | File | Purpose |
 |---|---|
 | `railway.json` | Railpack builder, build/start commands, health check, pre-deploy |
-| `.node-version` | Node.js 20 (required by Infisical SDK v5+) |
+| `.node-version` | Node.js 22 (Infisical SDK v5+ needs 20+) |
 | `package.json` `engines.node` | `>=20` |
 
 ## Generate a public URL

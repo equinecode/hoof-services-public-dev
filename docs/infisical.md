@@ -75,7 +75,7 @@ EXTERNAL_API_KEY=local-dev-key
 
 In production, set Infisical Machine Identity credentials via your deployment platform's secret manager. Do not commit credentials to source control.
 
-Infisical SDK v5 requires **Node.js 20+**.
+Infisical SDK v5 requires **Node.js 20+**; this service runs on Node 22 (`.node-version`, `package.json` `engines`).
 
 ## Source files
 
