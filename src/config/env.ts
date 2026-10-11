@@ -31,6 +31,9 @@ const envSchema = bootstrapEnvSchema.extend({
   // Moesif (optional — skipped when unset)
   MOESIF_APPLICATION_ID: z.string().optional(),
 
+  // Sentry (optional — error tracking skipped when unset)
+  SENTRY_DSN: z.string().url().optional(),
+
   // AWS
   AWS_REGION: z.string().default("us-east-1"),
   AWS_ENDPOINT_URL: z.string().url().optional(),

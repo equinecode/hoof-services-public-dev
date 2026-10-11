@@ -1,4 +1,5 @@
 import express from "express";
+import { requestId } from "@equinecode/hoof-observability";
 import type { Env } from "./config/env";
 import { createClerkMiddleware } from "./middleware/clerk";
 import { errorHandler } from "./middleware/errorHandler";
@@ -15,6 +16,7 @@ export function createApp(env: Env) {
 
   // Clerk must run before other middleware
   app.use(createClerkMiddleware(env));
+  app.use(requestId);
   app.use(express.json());
 
   const moesifMiddleware = createMoesifMiddleware(env);
