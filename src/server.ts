@@ -1,9 +1,12 @@
+import { initLogger, initSentry } from "@equinecode/hoof-observability";
 import type { Env } from "./config/env";
 import { createApp } from "./app";
 import { destroyAwsClients } from "./lib/aws";
 import { disconnectPrisma } from "./lib/prisma";
 
 export async function startServer(env: Env): Promise<import("node:http").Server> {
+  initLogger("hoof-public");
+  initSentry({ dsn: env.SENTRY_DSN, environment: env.NODE_ENV });
   const app = createApp(env);
 
   const server = app.listen(env.PORT, "0.0.0.0", () => {
