@@ -17,7 +17,7 @@ export function createApp(env: Env) {
   // Clerk must run before other middleware
   app.use(createClerkMiddleware(env));
   app.use(requestId);
-  app.use(express.json());
+  app.use(express.json({ limit: "100kb" }));
 
   const moesifMiddleware = createMoesifMiddleware(env);
   if (moesifMiddleware) {
