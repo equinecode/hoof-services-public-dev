@@ -3,6 +3,9 @@
 This service is currently an Express + TypeScript scaffold with health and
 authenticated identity-check routes. Its Prisma schema mirrors the
 `public` domain; public-domain API modules have not landed yet.
+Request-id correlation, structured logging and Sentry come from the shared
+`@equinecode/hoof-observability` package (2026-10-11), and JSON bodies over
+100kb are rejected (2026-10-13).
 
 | Integration | Purpose | Required |
 |---|---|---|
