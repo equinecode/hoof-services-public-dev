@@ -3,8 +3,7 @@
 This service is an Express + TypeScript service with health and
 authenticated identity-check routes, plus the unauthenticated public form
 intake described in [forms.md](./forms.md) (contact, advertising inquiry and
-signup, accepted through the shared outbox). Its Prisma schema mirrors only
-`shared.outbox_events`; it owns no tables.
+signup, accepted through its own outbox table in a standalone database).
 Request-id correlation, structured logging and Sentry come from the shared
 `@equinecode/hoof-observability` package (2026-10-11), and JSON bodies over
 100kb are rejected (2026-10-13).

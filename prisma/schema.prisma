@@ -6,12 +6,12 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  schemas  = ["public", "shared"]
+  schemas  = ["public"]
 }
 
 
-/// Mirror of `shared.outbox_events` (canonical model: services/database).
-/// Shared table: this service's drainer claims only `source = EVENT_SOURCE`.
+/// Transactional outbox for public form submissions. Owned by this service
+/// (own database, own migrations); nothing else reads or writes it.
 model OutboxEvent {
   id            String            @id @default(cuid())
   eventId       String            @unique @map("event_id")
@@ -26,12 +26,10 @@ model OutboxEvent {
   publishedAt   DateTime?         @map("published_at")
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
-  source        String            @default("")
 
   @@index([status, availableAt])
-  @@index([source, status, availableAt])
   @@map("outbox_events")
-  @@schema("shared")
+  @@schema("public")
 }
 
 enum OutboxEventStatus {
@@ -40,5 +38,5 @@ enum OutboxEventStatus {
   PUBLISHED
   FAILED
 
-  @@schema("shared")
+  @@schema("public")
 }

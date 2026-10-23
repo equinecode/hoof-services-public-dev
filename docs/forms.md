@@ -30,16 +30,18 @@ Fields are predefined and validated with strict Zod schemas
 
 ## How acceptance is made reliable
 
-1. The submission is upserted into `shared.outbox_events` (source
-   `EVENT_SOURCE`, default `com.hoofmart.public`) **before** `202` is sent.
-   No separate table: the outbox row is the durable record.
+1. The submission is upserted into this service's own `public.outbox_events`
+   table **before** `202` is sent. The outbox row is the durable record.
+   The service has its **own database** (`DATABASE_URL`, its own Prisma
+   migrations in `prisma/migrations`, applied by Railway's pre-deploy
+   `db:migrate:deploy`); it does not touch the shared marketplace database.
 2. The reference is deterministic (`HM-` + 10 Crockford base32 characters of a
    SHA-256), and the outbox upsert is keyed on the event id. A retry or
    double click returns the same reference and creates no second event.
    Signups dedupe per (list, email) forever; contact and advertising
    inquiries per (form, email, message) per UTC day.
 3. A drainer (`src/outbox/outbox-drainer.ts`, every `OUTBOX_DRAIN_INTERVAL_MS`)
-   claims this source's `PENDING` rows with `SKIP LOCKED`, publishes the frozen
+   claims `PENDING` rows with `SKIP LOCKED`, publishes the frozen
    envelope (ADR-001 §5, envelope `eventId` = outbox key) and marks them
    `PUBLISHED`. Failures back off and retry; after 10 attempts the row is
    `FAILED` with `last_error`. Rows stuck in `PUBLISHING` are released after 2
@@ -61,11 +63,23 @@ Ops visibility into `FAILED` rows is not wired yet (M3).
 
 | Variable | Default | Notes |
 |---|---|---|
-| `DATABASE_URL` | — | Required for forms; connects as `public_app_rw` |
-| `EVENT_SOURCE` | `com.hoofmart.public` | Outbox `source` and EventBridge `Source` |
+| `DATABASE_URL` | — | Required for forms; this service's own Postgres |
+| `EVENT_SOURCE` | `com.hoofmart.public` | EventBridge `Source` |
 | `AWS_EVENT_BUS_NAME` | `default` | |
 | `APP_ENVIRONMENT` | `INFISICAL_ENVIRONMENT` | Stamped on envelopes |
 | `OUTBOX_DRAIN_INTERVAL_MS` | `3000` | |
 | `TURNSTILE_SECRET_KEY` | — | Optional; enables captcha |
 
-Database grants: `services/database/docs/sql/public-app-role.sql`.
+## Database
+
+A standalone Postgres, same model as `services/ops`: on Railway, add a
+PostgreSQL service and link it so `DATABASE_URL` is injected; migrations run on
+deploy. Tests that need a real database are skipped unless `TEST_DATABASE_URL`
+points at one with migrations applied:
+
+```bash
+DATABASE_URL=$TEST_DATABASE_URL npm run db:migrate:deploy && npm test
+```
+
+Raw SQL in the outbox repository compares against `now() AT TIME ZONE 'UTC'`
+because Prisma stores `timestamp(3)` columns as UTC wall-clock time.
