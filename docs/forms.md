@@ -47,7 +47,16 @@ Fields are predefined and validated with strict Zod schemas
    `FAILED` with `last_error`. Rows stuck in `PUBLISHING` are released after 2
    minutes (consumers dedup on envelope `eventId`).
 
-Ops visibility into `FAILED` rows is not wired yet (M3).
+### Ops visibility of failures
+
+When a row goes `FAILED`, a sweep (about once a minute) opens an ops ticket through `POST /api/internal/tickets`
+(`OPS_SERVICE_URL` + `OPS_INTERNAL_API_SECRET`, the same shape as shipping's label-failure tickets) and stamps
+`failure_reported_at`; if ops is unreachable the row stays unstamped and is retried on the next sweep. The ticket has
+the reference, event, error and a re-queue `UPDATE`, never the visitor's message or contact details. Without the two
+variables the failure is only logged and the service says so at startup.
+
+Downstream, ops turns `contact_request.created` and `advertising_inquiry.created` into tickets
+(`POST /api/webhooks/public` in services/ops, via an EventBridge API destination); signups get no ticket.
 
 ## Spam controls
 
@@ -68,6 +77,8 @@ Ops visibility into `FAILED` rows is not wired yet (M3).
 | `AWS_EVENT_BUS_NAME` | `default` | |
 | `APP_ENVIRONMENT` | `INFISICAL_ENVIRONMENT` | Stamped on envelopes |
 | `OUTBOX_DRAIN_INTERVAL_MS` | `3000` | |
+| `OPS_SERVICE_URL` | — | Optional; with the secret below, failed submissions open an ops ticket |
+| `OPS_INTERNAL_API_SECRET` | — | Optional; ops' internal ticket secret (min 32 chars) |
 | `TURNSTILE_SECRET_KEY` | — | Optional; enables captcha |
 
 ## Database

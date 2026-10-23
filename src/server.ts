@@ -6,6 +6,7 @@ import { createTurnstile } from "./forms/turnstile";
 import { destroyAwsClients, getEventBridgeClient } from "./lib/aws";
 import { EventBridgePublisher } from "./outbox/event-publisher";
 import { startOutboxDrainWorker } from "./outbox/outbox-drainer";
+import { OpsFailureReporter } from "./outbox/ops-failure-reporter";
 import { OutboxRepository } from "./outbox/outbox-repository";
 import { disconnectPrisma, getPrisma } from "./lib/prisma";
 
@@ -30,8 +31,17 @@ export async function startServer(env: Env): Promise<import("node:http").Server>
         source: env.EVENT_SOURCE,
         environment: env.APP_ENVIRONMENT ?? env.INFISICAL_ENVIRONMENT,
       }),
-      { intervalMs: env.OUTBOX_DRAIN_INTERVAL_MS },
+      {
+        intervalMs: env.OUTBOX_DRAIN_INTERVAL_MS,
+        failureReporter:
+          env.OPS_SERVICE_URL && env.OPS_INTERNAL_API_SECRET
+            ? new OpsFailureReporter(env.OPS_SERVICE_URL, env.OPS_INTERNAL_API_SECRET)
+            : undefined,
+      },
     );
+    if (!env.OPS_SERVICE_URL || !env.OPS_INTERNAL_API_SECRET) {
+      console.warn("OPS_SERVICE_URL/OPS_INTERNAL_API_SECRET not set: failed form submissions are not reported to ops");
+    }
   } else {
     console.warn("DATABASE_URL not set: public form submissions are disabled");
   }
