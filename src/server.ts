@@ -18,7 +18,7 @@ export async function startServer(env: Env): Promise<import("node:http").Server>
   let forms: FormsService | undefined;
   let drainWorker: { stop: () => void } | undefined;
   if (env.DATABASE_URL) {
-    const repo = new OutboxRepository(getPrisma(env), env.EVENT_SOURCE);
+    const repo = new OutboxRepository(getPrisma(env));
     forms = new FormsService({
       sink: repo,
       turnstile: env.TURNSTILE_SECRET_KEY ? createTurnstile(env.TURNSTILE_SECRET_KEY) : undefined,

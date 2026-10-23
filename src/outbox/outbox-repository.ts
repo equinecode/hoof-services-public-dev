@@ -13,19 +13,22 @@ export type ClaimedOutboxEvent = {
 };
 
 /** Must match `OutboxEvent` `@@schema`/`@@map` in `prisma/schema.prisma`. */
-const OUTBOX_EVENTS_RELATION = "shared.outbox_events";
+const OUTBOX_EVENTS_RELATION = '"public"."outbox_events"';
 
 /**
- * Writes to the shared outbox (ADR-001). `enqueue` resolves only after the row
- * is committed, which is what lets the forms API confirm receipt (D-178).
- * `shared.outbox_events` is shared across services: rows are stamped with
- * `source` and `claimBatch` only takes this producer's.
+ * Prisma writes `timestamp(3)` columns as UTC wall-clock time, so raw SQL must
+ * compare against UTC too. Plain `now()` is converted using the session
+ * TimeZone and would skew every comparison on a non-UTC database.
+ */
+const UTC_NOW = Prisma.raw("(now() AT TIME ZONE 'UTC')");
+
+/**
+ * Writes to this service's own outbox table (ADR-001 shape). `enqueue`
+ * resolves only after the row is committed, which is what lets the forms API
+ * confirm receipt (D-178).
  */
 export class OutboxRepository implements FormEventSink {
-  constructor(
-    private readonly prisma: PrismaClient,
-    private readonly source: string,
-  ) {}
+  constructor(private readonly prisma: PrismaClient) {}
 
   async enqueue(event: FormEventInput): Promise<void> {
     const now = new Date();
@@ -35,7 +38,6 @@ export class OutboxRepository implements FormEventSink {
       create: {
         id: randomUUID(),
         eventId: event.eventId,
-        source: this.source,
         detailType: event.detailType,
         payload: event.payload as Prisma.InputJsonValue,
         correlationId: event.correlationId,
@@ -50,10 +52,10 @@ export class OutboxRepository implements FormEventSink {
   async claimBatch(limit: number): Promise<ClaimedOutboxEvent[]> {
     return this.prisma.$queryRaw<ClaimedOutboxEvent[]>`
       UPDATE ${Prisma.raw(OUTBOX_EVENTS_RELATION)}
-      SET status = 'PUBLISHING', updated_at = now()
+      SET status = 'PUBLISHING', updated_at = ${UTC_NOW}
       WHERE id IN (
         SELECT id FROM ${Prisma.raw(OUTBOX_EVENTS_RELATION)}
-        WHERE status = 'PENDING' AND available_at <= now() AND source = ${this.source}
+        WHERE status = 'PENDING' AND available_at <= ${UTC_NOW}
         ORDER BY created_at
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
@@ -70,9 +72,9 @@ export class OutboxRepository implements FormEventSink {
   async releaseStale(olderThanMs: number): Promise<number> {
     return this.prisma.$executeRaw`
       UPDATE ${Prisma.raw(OUTBOX_EVENTS_RELATION)}
-      SET status = 'PENDING', updated_at = now()
-      WHERE source = ${this.source} AND status = 'PUBLISHING'
-        AND updated_at < now() - (${olderThanMs} * interval '1 millisecond')
+      SET status = 'PENDING', updated_at = ${UTC_NOW}
+      WHERE status = 'PUBLISHING'
+        AND updated_at < ${UTC_NOW} - (${olderThanMs} * interval '1 millisecond')
     `;
   }
 
