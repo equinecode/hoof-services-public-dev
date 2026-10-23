@@ -5,9 +5,15 @@ import { createClerkMiddleware } from "./middleware/clerk";
 import { errorHandler } from "./middleware/errorHandler";
 import { createVerifyGatewaySecret } from "./middleware/gatewaySecretAuth";
 import { createMoesifMiddleware } from "./middleware/moesif";
-import { apiRouter } from "./routes";
+import type { FormsService } from "./forms/forms.service";
+import { createApiRouter } from "./routes";
 
-export function createApp(env: Env) {
+export type AppDeps = {
+  /** Undefined when DATABASE_URL is unset; form routes then answer 503. */
+  forms?: FormsService;
+};
+
+export function createApp(env: Env, deps: AppDeps = {}) {
   const app = express();
 
   app.disable("x-powered-by");
@@ -24,7 +30,7 @@ export function createApp(env: Env) {
     app.use(moesifMiddleware);
   }
 
-  app.use("/api", apiRouter);
+  app.use("/api", createApiRouter(deps));
 
   app.use((_req, res) => {
     res.status(404).json({ error: "Not found" });

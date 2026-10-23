@@ -1,13 +1,42 @@
 import { initLogger, initSentry } from "@equinecode/hoof-observability";
 import type { Env } from "./config/env";
 import { createApp } from "./app";
-import { destroyAwsClients } from "./lib/aws";
-import { disconnectPrisma } from "./lib/prisma";
+import { FormsService } from "./forms/forms.service";
+import { createTurnstile } from "./forms/turnstile";
+import { destroyAwsClients, getEventBridgeClient } from "./lib/aws";
+import { EventBridgePublisher } from "./outbox/event-publisher";
+import { startOutboxDrainWorker } from "./outbox/outbox-drainer";
+import { OutboxRepository } from "./outbox/outbox-repository";
+import { disconnectPrisma, getPrisma } from "./lib/prisma";
 
 export async function startServer(env: Env): Promise<import("node:http").Server> {
   initLogger("hoof-public");
   initSentry({ dsn: env.SENTRY_DSN, environment: env.NODE_ENV });
-  const app = createApp(env);
+
+  // Public forms need the outbox (durable acceptance); without a database the
+  // routes answer 503 rather than accepting what we cannot keep.
+  let forms: FormsService | undefined;
+  let drainWorker: { stop: () => void } | undefined;
+  if (env.DATABASE_URL) {
+    const repo = new OutboxRepository(getPrisma(env), env.EVENT_SOURCE);
+    forms = new FormsService({
+      sink: repo,
+      turnstile: env.TURNSTILE_SECRET_KEY ? createTurnstile(env.TURNSTILE_SECRET_KEY) : undefined,
+    });
+    drainWorker = startOutboxDrainWorker(
+      repo,
+      new EventBridgePublisher(getEventBridgeClient(env), {
+        busName: env.AWS_EVENT_BUS_NAME,
+        source: env.EVENT_SOURCE,
+        environment: env.APP_ENVIRONMENT ?? env.INFISICAL_ENVIRONMENT,
+      }),
+      { intervalMs: env.OUTBOX_DRAIN_INTERVAL_MS },
+    );
+  } else {
+    console.warn("DATABASE_URL not set: public form submissions are disabled");
+  }
+
+  const app = createApp(env, { forms });
 
   const server = app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`Server listening on port ${env.PORT} (${env.NODE_ENV})`);
@@ -15,6 +44,7 @@ export async function startServer(env: Env): Promise<import("node:http").Server>
 
   const shutdown = async (signal: string) => {
     console.log(`Received ${signal}, shutting down gracefully…`);
+    drainWorker?.stop();
     server.close(async () => {
       await disconnectPrisma();
       await destroyAwsClients();

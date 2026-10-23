@@ -1,0 +1,71 @@
+# Public forms
+
+Unauthenticated form intake for the HoofMart website (D-173–D-178,
+`docs/v1/architecture/public-marketing-boundary.md`). The site's **server**
+calls these routes; browsers never do, so there is no CORS and the gateway
+shared secret (`x-hoofmart-gateway-secret`) applies as on every other route.
+
+| Route | Event (`detail-type`) | Event id |
+|---|---|---|
+| `POST /api/public/forms/contact` | `contact_request.created` | `contact_request:<ref>:created` |
+| `POST /api/public/forms/advertising-inquiry` | `advertising_inquiry.created` | `advertising_inquiry:<ref>:created` |
+| `POST /api/public/forms/signup` | `signup_request.created` | `signup_request:<ref>:created` |
+
+`signup` covers the newsletter and app-launch waitlist (`list`:
+`newsletter` \| `waitlist`). A signup request records interest only; it does
+not enroll anyone or start any outbound campaign.
+
+Fields are predefined and validated with strict Zod schemas
+(`src/forms/schemas.ts`); unknown fields are rejected.
+
+## Responses
+
+| Status | Meaning |
+|---|---|
+| `202 {reference, status:"accepted"}` | Durably accepted. Receipt, not completion. |
+| `422 {error:"validation_failed", fields}` | Fix the input; do not retry as-is. |
+| `400 {error:"captcha_failed"}` | Turnstile token missing/invalid. |
+| `429 {error:"rate_limited"}` + `Retry-After` | Per visitor address and form. |
+| `503 {error:"temporarily_unavailable", retryable:true}` | Nothing was accepted; safe to retry. Also returned when `DATABASE_URL` is unset. |
+
+## How acceptance is made reliable
+
+1. The submission is upserted into `shared.outbox_events` (source
+   `EVENT_SOURCE`, default `com.hoofmart.public`) **before** `202` is sent.
+   No separate table: the outbox row is the durable record.
+2. The reference is deterministic (`HM-` + 10 Crockford base32 characters of a
+   SHA-256), and the outbox upsert is keyed on the event id. A retry or
+   double click returns the same reference and creates no second event.
+   Signups dedupe per (list, email) forever; contact and advertising
+   inquiries per (form, email, message) per UTC day.
+3. A drainer (`src/outbox/outbox-drainer.ts`, every `OUTBOX_DRAIN_INTERVAL_MS`)
+   claims this source's `PENDING` rows with `SKIP LOCKED`, publishes the frozen
+   envelope (ADR-001 §5, envelope `eventId` = outbox key) and marks them
+   `PUBLISHED`. Failures back off and retry; after 10 attempts the row is
+   `FAILED` with `last_error`. Rows stuck in `PUBLISHING` are released after 2
+   minutes (consumers dedup on envelope `eventId`).
+
+Ops visibility into `FAILED` rows is not wired yet (M3).
+
+## Spam controls
+
+- Honeypot field `website`: a filled value gets a normal-looking `202` and is
+  dropped.
+- Cloudflare Turnstile: set `TURNSTILE_SECRET_KEY` and every submission needs a
+  valid `turnstileToken`; verification fails closed.
+- In-memory per-instance rate limit keyed on `x-forwarded-for` (first value,
+  as forwarded by the site's server) — a backstop to gateway throttling.
+- Bodies over 100kb are rejected by the existing JSON limit.
+
+## Environment
+
+| Variable | Default | Notes |
+|---|---|---|
+| `DATABASE_URL` | — | Required for forms; connects as `public_app_rw` |
+| `EVENT_SOURCE` | `com.hoofmart.public` | Outbox `source` and EventBridge `Source` |
+| `AWS_EVENT_BUS_NAME` | `default` | |
+| `APP_ENVIRONMENT` | `INFISICAL_ENVIRONMENT` | Stamped on envelopes |
+| `OUTBOX_DRAIN_INTERVAL_MS` | `3000` | |
+| `TURNSTILE_SECRET_KEY` | — | Optional; enables captcha |
+
+Database grants: `services/database/docs/sql/public-app-role.sql`.

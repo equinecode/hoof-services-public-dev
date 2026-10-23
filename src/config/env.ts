@@ -41,6 +41,14 @@ const envSchema = bootstrapEnvSchema.extend({
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
   AWS_S3_BUCKET: z.string().optional(),
   AWS_EVENT_BUS_NAME: z.string().default("default"),
+  EVENT_SOURCE: z.string().default("com.hoofmart.public"),
+  // Optional: defaults to INFISICAL_ENVIRONMENT. Stamped on event envelopes.
+  APP_ENVIRONMENT: z.string().optional(),
+  OUTBOX_DRAIN_INTERVAL_MS: z.coerce.number().int().min(250).default(3000),
+
+  // Public forms. When set, every form submission must carry a valid
+  // Cloudflare Turnstile token (the site's server forwards it).
+  TURNSTILE_SECRET_KEY: z.string().optional(),
 
   // Marketplace API Gateway — shared secret injected as x-hoofmart-gateway-secret
   // on every proxied request (see hoofcloud docs/terraform/marketplace-api-gateway.md).
