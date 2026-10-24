@@ -3,29 +3,29 @@ generator client {
   output   = "../src/generated/prisma"
 }
 
-
 datasource db {
   provider = "postgresql"
   schemas  = ["public"]
 }
 
-
 /// Transactional outbox for public form submissions. Owned by this service
 /// (own database, own migrations); nothing else reads or writes it.
 model OutboxEvent {
-  id            String            @id @default(cuid())
-  eventId       String            @unique @map("event_id")
-  detailType    String            @map("detail_type")
-  payload       Json
-  correlationId String?           @map("correlation_id")
-  causationId   String?           @map("causation_id")
-  status        OutboxEventStatus @default(PENDING)
-  attempts      Int               @default(0)
-  lastError     String?           @map("last_error")
-  availableAt   DateTime          @default(now()) @map("available_at")
-  publishedAt   DateTime?         @map("published_at")
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
+  id                String            @id @default(cuid())
+  eventId           String            @unique @map("event_id")
+  detailType        String            @map("detail_type")
+  payload           Json
+  correlationId     String?           @map("correlation_id")
+  causationId       String?           @map("causation_id")
+  status            OutboxEventStatus @default(PENDING)
+  attempts          Int               @default(0)
+  lastError         String?           @map("last_error")
+  availableAt       DateTime          @default(now()) @map("available_at")
+  publishedAt       DateTime?         @map("published_at")
+  /// Set once ops has been told this row exhausted its retries (see ops-failure-reporter.ts).
+  failureReportedAt DateTime?         @map("failure_reported_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
   @@index([status, availableAt])
   @@map("outbox_events")

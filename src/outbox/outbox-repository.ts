@@ -12,6 +12,15 @@ export type ClaimedOutboxEvent = {
   attempts: number;
 };
 
+export type FailedOutboxEvent = {
+  id: string;
+  eventId: string;
+  detailType: string;
+  attempts: number;
+  lastError: string | null;
+  createdAt: Date;
+};
+
 /** Must match `OutboxEvent` `@@schema`/`@@map` in `prisma/schema.prisma`. */
 const OUTBOX_EVENTS_RELATION = '"public"."outbox_events"';
 
@@ -76,6 +85,20 @@ export class OutboxRepository implements FormEventSink {
       WHERE status = 'PUBLISHING'
         AND updated_at < ${UTC_NOW} - (${olderThanMs} * interval '1 millisecond')
     `;
+  }
+
+  /** FAILED rows ops has not been told about yet (oldest first). */
+  async findUnreportedFailures(limit: number): Promise<FailedOutboxEvent[]> {
+    return this.prisma.outboxEvent.findMany({
+      where: { status: "FAILED", failureReportedAt: null },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+      select: { id: true, eventId: true, detailType: true, attempts: true, lastError: true, createdAt: true },
+    });
+  }
+
+  async markFailureReported(id: string): Promise<void> {
+    await this.prisma.outboxEvent.update({ where: { id }, data: { failureReportedAt: new Date() } });
   }
 
   async markPublished(id: string): Promise<void> {

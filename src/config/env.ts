@@ -46,6 +46,12 @@ const envSchema = bootstrapEnvSchema.extend({
   APP_ENVIRONMENT: z.string().optional(),
   OUTBOX_DRAIN_INTERVAL_MS: z.coerce.number().int().min(250).default(3000),
 
+  // services/ops: when both are set, a form submission that exhausts its publish retries opens an ops ticket
+  // (POST /api/internal/tickets, x-internal-api-secret). Optional so the service still boots without them; the
+  // failure is then only logged and stays FAILED in the outbox.
+  OPS_SERVICE_URL: z.string().url().optional(),
+  OPS_INTERNAL_API_SECRET: z.string().min(32).optional(),
+
   // Public forms. When set, every form submission must carry a valid
   // Cloudflare Turnstile token (the site's server forwards it).
   TURNSTILE_SECRET_KEY: z.string().optional(),

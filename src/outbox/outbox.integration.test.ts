@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { FormsService } from "../forms/forms.service";
 import { createPrismaClient } from "../lib/prisma";
-import { drainOutboxBatch } from "./outbox-drainer";
+import { drainOutboxBatch, reportFailedRows } from "./outbox-drainer";
 import { OutboxRepository } from "./outbox-repository";
 
 // Runs against a real Postgres with migrations applied, e.g.
@@ -56,5 +56,17 @@ test("outbox against a real database", { skip: !url && "TEST_DATABASE_URL not se
     await prisma.$executeRaw`UPDATE "public"."outbox_events" SET updated_at = (now() AT TIME ZONE 'UTC') - interval '5 minutes' WHERE status = 'PUBLISHING'`;
     assert.equal(await repo.releaseStale(60_000), 1);
     assert.deepEqual(await drainOutboxBatch(repo, { publish: async () => {} }), { published: 1, failed: 0 });
+  });
+
+  await t.test("failed rows are reported to ops exactly once", async () => {
+    await prisma.outboxEvent.deleteMany();
+    await service.submit("contact", { name: "A", email: "z@b.co", message: "Please call me back." });
+    await drainOutboxBatch(repo, { publish: async () => { throw new Error("bus down"); } }, { maxAttempts: 1, backoffMs: () => 0 });
+    const reports: string[] = [];
+    const reporter = { report: async (r: { eventId: string }) => void reports.push(r.eventId) };
+    assert.deepEqual(await reportFailedRows(repo, reporter), { reported: 1, failed: 0 });
+    assert.deepEqual(await reportFailedRows(repo, reporter), { reported: 0, failed: 0 });
+    assert.equal(reports.length, 1);
+    assert.ok((await prisma.outboxEvent.findFirstOrThrow()).failureReportedAt);
   });
 });
