@@ -6,11 +6,14 @@ import { errorHandler } from "./middleware/errorHandler";
 import { createVerifyGatewaySecret } from "./middleware/gatewaySecretAuth";
 import { createMoesifMiddleware } from "./middleware/moesif";
 import type { FormsService } from "./forms/forms.service";
+import type { PausableWorker } from "./routes/background-workers";
 import { createApiRouter } from "./routes";
 
 export type AppDeps = {
   /** Undefined when DATABASE_URL is unset; form routes then answer 503. */
   forms?: FormsService;
+  /** Pausable in-process workers, keyed by name; see routes/background-workers.ts. */
+  backgroundWorkers?: Record<string, PausableWorker>;
 };
 
 export function createApp(env: Env, deps: AppDeps = {}) {
@@ -30,7 +33,7 @@ export function createApp(env: Env, deps: AppDeps = {}) {
     app.use(moesifMiddleware);
   }
 
-  app.use("/api", createApiRouter(deps));
+  app.use("/api", createApiRouter(deps, env));
 
   app.use((_req, res) => {
     res.status(404).json({ error: "Not found" });

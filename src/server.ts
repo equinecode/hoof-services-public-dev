@@ -5,7 +5,7 @@ import { FormsService } from "./forms/forms.service";
 import { createTurnstile } from "./forms/turnstile";
 import { destroyAwsClients, getEventBridgeClient } from "./lib/aws";
 import { EventBridgePublisher } from "./outbox/event-publisher";
-import { startOutboxDrainWorker } from "./outbox/outbox-drainer";
+import { startOutboxDrainWorker, type OutboxDrainWorker } from "./outbox/outbox-drainer";
 import { OpsFailureReporter } from "./outbox/ops-failure-reporter";
 import { OutboxRepository } from "./outbox/outbox-repository";
 import { disconnectPrisma, getPrisma } from "./lib/prisma";
@@ -17,7 +17,7 @@ export async function startServer(env: Env): Promise<import("node:http").Server>
   // Public forms need the outbox (durable acceptance); without a database the
   // routes answer 503 rather than accepting what we cannot keep.
   let forms: FormsService | undefined;
-  let drainWorker: { stop: () => void } | undefined;
+  let drainWorker: OutboxDrainWorker | undefined;
   if (env.DATABASE_URL) {
     const repo = new OutboxRepository(getPrisma(env));
     forms = new FormsService({
@@ -47,7 +47,7 @@ export async function startServer(env: Env): Promise<import("node:http").Server>
     console.warn("DATABASE_URL not set: public form submissions are disabled");
   }
 
-  const app = createApp(env, { forms });
+  const app = createApp(env, { forms, backgroundWorkers: drainWorker ? { "outbox-drain": drainWorker } : {} });
 
   const server = app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`Server listening on port ${env.PORT} (${env.NODE_ENV})`);

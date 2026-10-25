@@ -82,6 +82,14 @@ export async function reportFailedRows(
   return { reported, failed };
 }
 
+export interface OutboxDrainWorker {
+  stop: () => void;
+  /** Ticks keep firing but touch neither the database nor the network, so the Railway service can sleep. */
+  pause: () => void;
+  resume: () => void;
+  isPaused: () => boolean;
+}
+
 const FAILURE_SWEEP_INTERVAL_MS = 60_000;
 // Well under STALE_PUBLISHING_MS, so a crashed row is still released promptly.
 const STALE_RELEASE_INTERVAL_MS = 60_000;
@@ -96,15 +104,20 @@ export function startOutboxDrainWorker(
   repo: OutboxRepository,
   publisher: EventPublisher,
   options: OutboxDrainOptions & { intervalMs: number; maxIdleIntervalMs?: number; failureReporter?: FailureReporter },
-): { stop: () => void } {
+): OutboxDrainWorker {
   const maxIdleMs = Math.max(options.maxIdleIntervalMs ?? DEFAULT_MAX_IDLE_INTERVAL_MS, options.intervalMs);
   let stopped = false;
+  let paused = false;
   let timer: NodeJS.Timeout | undefined;
   let delayMs = options.intervalMs;
   let lastSweep = 0;
   let lastRelease = 0;
 
   const tick = async () => {
+    if (paused) {
+      schedule();
+      return;
+    }
     const releaseStale = Date.now() - lastRelease >= STALE_RELEASE_INTERVAL_MS;
     if (releaseStale) lastRelease = Date.now();
     try {
@@ -133,5 +146,13 @@ export function startOutboxDrainWorker(
       stopped = true;
       if (timer) clearTimeout(timer);
     },
+    pause: () => {
+      paused = true;
+    },
+    resume: () => {
+      paused = false;
+      delayMs = options.intervalMs;
+    },
+    isPaused: () => paused,
   };
 }

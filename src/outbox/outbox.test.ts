@@ -95,3 +95,24 @@ test("worker backs off when idle, resets on work, and releases stale rows once a
   await advance(60_000);
   assert.equal(claims.length, 7);
 });
+
+test("a paused worker never touches the repository; resume restores polling", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_000_000 });
+  let claims = 0;
+  const repo = {
+    releaseStale: async () => 0,
+    claimBatch: async () => { claims += 1; return []; },
+  } as unknown as OutboxRepository;
+  const worker = startOutboxDrainWorker(repo, { publish: async () => {} }, { intervalMs: 1000, maxIdleIntervalMs: 4000 });
+  const advance = async (ms: number) => { t.mock.timers.tick(ms); await new Promise((r) => setImmediate(r)); };
+
+  worker.pause();
+  assert.equal(worker.isPaused(), true);
+  await advance(60_000);
+  assert.equal(claims, 0);
+
+  worker.resume();
+  await advance(60_000);
+  assert.ok(claims > 0);
+  worker.stop();
+});
