@@ -45,6 +45,7 @@ const envSchema = bootstrapEnvSchema.extend({
   // Optional: defaults to INFISICAL_ENVIRONMENT. Stamped on event envelopes.
   APP_ENVIRONMENT: z.string().optional(),
   OUTBOX_DRAIN_INTERVAL_MS: z.coerce.number().int().min(250).default(3000),
+  OUTBOX_IDLE_MAX_INTERVAL_MS: z.coerce.number().int().min(250).default(30_000),
 
   // services/ops: when both are set, a form submission that exhausts its publish retries opens an ops ticket
   // (POST /api/internal/tickets, x-internal-api-secret). Optional so the service still boots without them; the
