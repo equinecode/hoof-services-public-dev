@@ -51,6 +51,13 @@ const envSchema = bootstrapEnvSchema.extend({
   // outbox drainer can be paused and Railway can sleep the service. Optional: the route is not mounted without it.
   BACKGROUND_WORKERS_INTERNAL_API_SECRET: z.string().min(32).optional(),
 
+  // true: every background worker starts paused (no DB/AWS polling), so a Railway service that wakes from sleep
+  // stays quiet until `npm run workers:on` in hoof-test-harness. Default false.
+  WORKERS_START_PAUSED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+
   // services/ops: when both are set, a form submission that exhausts its publish retries opens an ops ticket
   // (POST /api/internal/tickets, x-internal-api-secret). Optional so the service still boots without them; the
   // failure is then only logged and stays FAILED in the outbox.
