@@ -47,7 +47,12 @@ export async function startServer(env: Env): Promise<import("node:http").Server>
     console.warn("DATABASE_URL not set: public form submissions are disabled");
   }
 
-  const app = createApp(env, { forms, backgroundWorkers: drainWorker ? { "outbox-drain": drainWorker } : {} });
+  const backgroundWorkers: Record<string, OutboxDrainWorker> = drainWorker ? { "outbox-drain": drainWorker } : {};
+  if (env.WORKERS_START_PAUSED) {
+    for (const worker of Object.values(backgroundWorkers)) worker.pause();
+    console.log("WORKERS_START_PAUSED: background workers start paused");
+  }
+  const app = createApp(env, { forms, backgroundWorkers });
 
   const server = app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`Server listening on port ${env.PORT} (${env.NODE_ENV})`);
