@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EventBridgePublisher } from "./event-publisher";
-import { drainOutboxBatch } from "./outbox-drainer";
+import { drainOutboxBatch, startOutboxDrainWorker } from "./outbox-drainer";
 import type { OutboxRepository } from "./outbox-repository";
 
 const row = (n: number) => ({
@@ -56,4 +56,42 @@ test("publisher sends the frozen envelope and surfaces rejected entries", async 
     { busName: "bus", source: "s", environment: "dev" },
   );
   await assert.rejects(() => bad.publish({ eventId: "e", detailType: "t", detail: {} }), /AccessDenied/);
+});
+
+test("drain skips the stale release when told to", async () => {
+  const { repo, calls } = fakeRepo([]);
+  await drainOutboxBatch(repo, { publish: async () => {} }, { releaseStale: false });
+  assert.equal(calls.released, 0);
+});
+
+test("worker backs off when idle, resets on work, and releases stale rows once a minute", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_000_000 });
+  let pending = 0;
+  const claims: number[] = [];
+  let released = 0;
+  const repo = {
+    releaseStale: async () => { released += 1; return 0; },
+    claimBatch: async () => { claims.push(Date.now()); const n = pending; pending = 0; return Array.from({ length: n }, (_, i) => row(i)); },
+    markPublished: async () => {},
+    markFailed: async () => {},
+  } as unknown as OutboxRepository;
+  const worker = startOutboxDrainWorker(repo, { publish: async () => {} }, { intervalMs: 1000, maxIdleIntervalMs: 8000 });
+  const advance = async (ms: number) => { t.mock.timers.tick(ms); await new Promise((r) => setImmediate(r)); };
+
+  await advance(1000); // tick 1 (idle) -> next in 2s
+  await advance(2000); // tick 2 (idle) -> next in 4s
+  await advance(4000); // tick 3 (idle) -> next in 8s
+  await advance(8000); // tick 4 (idle) -> capped at 8s
+  await advance(8000); // tick 5
+  assert.equal(claims.length, 5);
+  assert.equal(released, 1, "stale release is not run every tick");
+
+  pending = 1;
+  await advance(8000); // tick 6 finds work -> interval resets to 1s
+  await advance(1000);
+  assert.equal(claims.length, 7);
+
+  worker.stop();
+  await advance(60_000);
+  assert.equal(claims.length, 7);
 });

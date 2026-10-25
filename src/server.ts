@@ -33,6 +33,7 @@ export async function startServer(env: Env): Promise<import("node:http").Server>
       }),
       {
         intervalMs: env.OUTBOX_DRAIN_INTERVAL_MS,
+        maxIdleIntervalMs: env.OUTBOX_IDLE_MAX_INTERVAL_MS,
         failureReporter:
           env.OPS_SERVICE_URL && env.OPS_INTERNAL_API_SECRET
             ? new OpsFailureReporter(env.OPS_SERVICE_URL, env.OPS_INTERNAL_API_SECRET)
