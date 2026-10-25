@@ -78,6 +78,7 @@ Downstream, ops turns `contact_request.created` and `advertising_inquiry.created
 | `APP_ENVIRONMENT` | `INFISICAL_ENVIRONMENT` | Stamped on envelopes |
 | `OUTBOX_DRAIN_INTERVAL_MS` | `3000` | Poll interval while rows are flowing |
 | `OUTBOX_IDLE_MAX_INTERVAL_MS` | `30000` | Empty ticks double the wait up to this; Prisma Postgres bills every query, so idle polling is capped. A new submission waits at most this long to publish |
+| `BACKGROUND_WORKERS_INTERNAL_API_SECRET` | — | Optional (min 32 chars); mounts `POST /api/internal/admin/background-workers/{enable,disable,status}` to pause the drainer (in-memory; a restart re-enables it) |
 | `OPS_SERVICE_URL` | — | Optional; with the secret below, failed submissions open an ops ticket |
 | `OPS_INTERNAL_API_SECRET` | — | Optional; ops' internal ticket secret (min 32 chars) |
 | `TURNSTILE_SECRET_KEY` | — | Optional; enables captcha |

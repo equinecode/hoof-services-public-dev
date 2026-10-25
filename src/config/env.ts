@@ -47,6 +47,10 @@ const envSchema = bootstrapEnvSchema.extend({
   OUTBOX_DRAIN_INTERVAL_MS: z.coerce.number().int().min(250).default(3000),
   OUTBOX_IDLE_MAX_INTERVAL_MS: z.coerce.number().int().min(250).default(30_000),
 
+  // Gates POST /api/internal/admin/background-workers/:action (hoof-test-harness `npm run workers:off`), so the
+  // outbox drainer can be paused and Railway can sleep the service. Optional: the route is not mounted without it.
+  BACKGROUND_WORKERS_INTERNAL_API_SECRET: z.string().min(32).optional(),
+
   // services/ops: when both are set, a form submission that exhausts its publish retries opens an ops ticket
   // (POST /api/internal/tickets, x-internal-api-secret). Optional so the service still boots without them; the
   // failure is then only logged and stays FAILED in the outbox.
